@@ -12,6 +12,9 @@ Original description of the method is available here:
 Install cairo dev package:
 
 `sudo apt-get install libcairo2-dev`
+
+Then run make:
+
 `make`
 
 Note: In case you dont need smooth graphics `cairo` provides, you can remove
