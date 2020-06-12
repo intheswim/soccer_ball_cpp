@@ -11,9 +11,8 @@ Original description of the method is available here:
 
 Install cairo dev package:
 
-```sudo apt-get install libcairo2-dev
-   make
-```
+`sudo apt-get install libcairo2-dev`
+`make`
 
 Note: In case you dont need smooth graphics `cairo` provides, you can remove
 `#USE_CAIRO` define from `GenGraphics.h` and references to `cairo` from the Makefile. It will be using
