@@ -1,6 +1,6 @@
 # Soccer Ball
 
-This is C++ port of original Java applet, using `xlib` and `cairo`.
+This is C++ port of my Java applet, using `xlib` and `cairo`.
 Original description of the method is available here:
 
 [Mathematics of the soccer ball](http://www.hoist-point.com/soccerball.htm)
