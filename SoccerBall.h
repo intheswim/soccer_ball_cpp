@@ -12,6 +12,8 @@
 #pragma once
 
 #include "math.h"
+#include "assert.h"
+
 #include <vector>
 #include <X11/Xlib.h>
 
@@ -24,7 +26,7 @@
 #define WHITE 	0xFFFFFF
 
 #define BALL_RADIUS 190
-
+#define SEAM_THICKNESS 0.01
 
 class DPoint
 {
@@ -62,6 +64,13 @@ class DPoint
 		x = x * k;
 		y = y * k;
 		z = z * k;
+	}
+
+	double SquaredDistance (const DPoint & other) const 
+	{
+		return	(x - other.x) * (x - other.x) +
+				(y - other.y) * (y - other.y) +
+				(z - other.z) * (z - other.z) ;
 	}
 };
 
@@ -182,31 +191,23 @@ class SoccerBall
 		point.z = z * cos (tilt) - y * sin(tilt) ;
 	}
 
-	double GetZCoord (DPoint pt)
+	double GetZCoord (const DPoint & pt)
 	{
 		return pt.z;
 	}
 
-	double DistanceDPoints (DPoint pt1, DPoint pt2)
+	double SquaredDistance (const DPoint & pt1, const DPoint & pt2)
 	{
-		return	(pt1.x - pt2.x) * (pt1.x - pt2.x) +
-				(pt1.y - pt2.y) * (pt1.y - pt2.y) +
-				(pt1.z - pt2.z) * (pt1.z - pt2.z) ;
+		return pt1.SquaredDistance (pt2);
 	}
 
-	double AngleDPoints (DPoint & point1, DPoint & point2)
+	double AngleDPoints (const DPoint & point1, const DPoint & point2)
 	{
-		double d=(point1.x * point2.x)  +
-				 (point1.y * point2.y)  +
-				 (point1.z * point2.z) ;
+		double d = (point1.x * point2.x)  +
+				 	(point1.y * point2.y)  +
+					(point1.z * point2.z) ;
 
 		return asin(d);
-	}
-
-	void Transform (int x, int y, DPoint pt)
-	{
-		x = (int)(centerX + radius * pt.x) ;
-		y = (int)(centerY + radius * pt.y) ;
 	}
 
 	void updateStorage (double delta, double tilt)
@@ -239,7 +240,7 @@ class SoccerBall
 		vertex [0].y = 1;
 		vertex [0].z = 0;
 
-		for (i=1; i <= 5; i++)
+		for (i = 1; i <= 5; i++)
 		{
 			alpha = 0.4 * M_PI * (i-1); 
 			vertex[i].x = sin(beta) * cos(alpha);
@@ -260,7 +261,7 @@ class SoccerBall
 		}
 	}
 
-	void FindIntermediatePoint (DPoint & pt1, DPoint & pt2, DPoint & out, double fraction)
+	void FindIntermediatePoint (const DPoint & pt1, const DPoint & pt2, DPoint & out, double fraction)
 	{
 		out.x = pt1.x + (pt2.x - pt1.x) * fraction;
 		out.y = pt1.y + (pt2.y - pt1.y) * fraction;
@@ -269,23 +270,20 @@ class SoccerBall
 		out.Normalize();
 	}
 
-	int findFiveClosest (DPoint & from, int start, DPoint * points, int cnt, double min)
+	int findClosest (const DPoint & from, int start, const DPoint * points, int cnt, double min)
 	{
-		double dist=0;
+		double dist = 0;
 
 		for (int i = start; i < cnt; i++)
 			{
-			dist = 
-			(from.x-points[i].x) * (from.x-points[i].x) +
-			(from.y-points[i].y) * (from.y-points[i].y) +
-			(from.z-points[i].z) * (from.z-points[i].z) ;
+			dist = from.SquaredDistance (points[i]);
 
 			if (dist < min)	return i;
 			}
 		return -1;
 	}
 
-	void drawPaintedPentagons (DPoint * pentagon_points, GC & gc)
+	void drawPaintedPentagons (const DPoint * pentagon_points, GC & gc)
 	{
 		DPoint * pent_set1 = new DPoint [5];
 		int j, cnt, index, closest, total_parts = 5 * seams_parts;
@@ -297,20 +295,20 @@ class SoccerBall
 		{
 			closest = 0;
 			cnt=0;
-			while (0 <= (closest = findFiveClosest (vertex[i], closest, pentagon_points, 60, 0.4)))
+			while (0 <= (closest = findClosest (vertex[i], closest, pentagon_points, 60, 0.4)))
 			{
 				pent_set1[cnt] = pentagon_points[closest]; 
 				closest++;
 				cnt++;
 			}
 			// safety net
-			if (cnt < 5) return;
+			assert (cnt == 5);
 
 			for (cnt=0; cnt < 4; cnt++)
 			{
 				for (j = cnt + 1; j < 5; )
 				{
-					if (DistanceDPoints(pent_set1[cnt], pent_set1[j]) > 0.4) j++;					
+					if (SquaredDistance (pent_set1[cnt], pent_set1[j]) > 0.4) j++;					
 					else 
 					{
 						if (j != cnt+1)
@@ -453,7 +451,7 @@ class SoccerBall
 		delete[] edge;
 	}
 
-	void drawSeams (DPoint * pentagon_points, GC & gc)
+	void drawSeams (const DPoint * pentagon_points, GC & gc)
 	{
 		int j, cnt, index;
 		float x, y;
@@ -466,13 +464,16 @@ class SoccerBall
 		for (int i = 0; i < 60; i++)
 		{
 			int closest = i;
-			while (0 <= (closest = findFiveClosest (pentagon_points[i], closest+1, pentagon_points, 60, 0.4)))
+			while (0 <= (closest = findClosest (pentagon_points[i], closest+1, pentagon_points, 60, 0.4)))
 			{
 				line[0].Assign (pentagon_points[i].x, pentagon_points[i].y,
 										pentagon_points[i].z);
 
 				line[seams_parts].Assign (pentagon_points[closest].x, pentagon_points[closest].y,
 										pentagon_points[closest].z);
+
+				// vector is cross product which is perpendicular to line.
+				// we use it to create polygon which is 1/50 thick comapred to length of the line.
 
 				vector.Assign (pentagon_points[i].y * pentagon_points[closest].z -
 								     pentagon_points[closest].y * pentagon_points[i].z,
@@ -484,9 +485,9 @@ class SoccerBall
 									 pentagon_points[closest].x * pentagon_points[i].y);
 
 				vector.Normalize();
-				vector.x = vector.x / 100;
-				vector.y = vector.y / 100;
-				vector.z = vector.z / 100;
+				vector.x = vector.x * SEAM_THICKNESS;
+				vector.y = vector.y * SEAM_THICKNESS;
+				vector.z = vector.z * SEAM_THICKNESS;
 
 				for (j = 1; j <= seams_parts - 1; j++)
 				{
@@ -573,7 +574,7 @@ class SoccerBall
 		for (int i=0; i < 12; i++)
 		{
 			closest = i;
-			while (0 <= (closest = findFiveClosest (vertex[i], closest+1, vertex, 12, 1.2)))
+			while (0 <= (closest = findClosest (vertex[i], closest+1, vertex, 12, 1.2)))
 			{
 				FindIntermediatePoint (vertex[i], vertex[closest], pent1, 1/3.0);
 				FindIntermediatePoint (vertex[i], vertex[closest], pent2, 2/3.0);
@@ -601,10 +602,13 @@ class SoccerBall
 
 		gg->setPenWidth(gc, 1.0); 
 
+		// this is a little redundant, we can calculate points once
+		// instead of doing it on every draw call.
 		FindPentagonPoints (pentagon_points);		
 
 		gg->setColor (gc, DKGRAY);
 
+		// "find closest" part in this function also can be done only once.
 		drawPaintedPentagons (pentagon_points, gc);
 
 		gg->setColor(gc, BLACK );
